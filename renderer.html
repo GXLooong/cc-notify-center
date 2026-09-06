@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self'; img-src 'self'">
+  <link rel="stylesheet" href="style.css">
+  <title>GXL今天干什么</title>
+</head>
+<body>
+  <div id="titlebar">
+    <span id="title">GXL今天干什么</span>
+    <span id="unread-badge" class="hidden"></span>
+    <div id="snap-wrap">
+      <button id="snap-btn" title="窗口贴靠">⛶</button>
+      <div id="snap-flyout" class="hidden">
+        <div class="snap-row">
+          <button class="snap-opt" data-snap="left" title="左半屏"><span class="mini-screen"><i class="pos-left"></i></span></button>
+          <button class="snap-opt" data-snap="right" title="右半屏"><span class="mini-screen"><i class="pos-right"></i></span></button>
+          <button class="snap-opt" data-snap="top" title="上半屏"><span class="mini-screen"><i class="pos-top"></i></span></button>
+          <button class="snap-opt" data-snap="bottom" title="下半屏"><span class="mini-screen"><i class="pos-bottom"></i></span></button>
+        </div>
+        <div class="snap-row">
+          <button class="snap-opt" data-snap="tl" title="左上 1/4"><span class="mini-screen"><i class="pos-tl"></i></span></button>
+          <button class="snap-opt" data-snap="tr" title="右上 1/4"><span class="mini-screen"><i class="pos-tr"></i></span></button>
+          <button class="snap-opt" data-snap="bl" title="左下 1/4"><span class="mini-screen"><i class="pos-bl"></i></span></button>
+          <button class="snap-opt" data-snap="br" title="右下 1/4"><span class="mini-screen"><i class="pos-br"></i></span></button>
+        </div>
+      </div>
+    </div>
+    <button id="pin-btn" title="置顶">📌</button>
+    <button id="hide-btn" title="隐藏 (Alt+Q)">—</button>
+  </div>
+  <div id="main">
+    <!-- 左栏:任务记录 -->
+    <div id="tasks-panel">
+      <div id="tasks-header">
+        <span class="panel-title">任务记录</span>
+        <button id="add-task-btn">＋ 新增</button>
+      </div>
+      <div id="add-task-form" class="hidden">
+        <div class="zone-pick">
+          <label><input type="radio" name="zone" value="today" checked>今日任务</label>
+          <label><input type="radio" name="zone" value="longterm">长期任务</label>
+        </div>
+        <input id="new-task-title" placeholder="标题" maxlength="200">
+        <textarea id="new-task-content" placeholder="具体内容" rows="3"></textarea>
+        <div class="form-actions">
+          <span class="hint">Ctrl+Enter 保存</span>
+          <button id="new-task-cancel">取消</button>
+          <button id="new-task-save">保存</button>
+        </div>
+      </div>
+      <div class="zone-title">今日任务</div>
+      <div id="today-zone" class="task-zone"></div>
+      <div class="zone-title">长期任务</div>
+      <div id="longterm-zone" class="task-zone"></div>
+      <div id="tasks-footer">
+        <button id="trash-btn">🗑 回收站</button>
+      </div>
+    </div>
+    <!-- 右栏:CC 通知 -->
+    <div id="notify-panel">
+      <div id="list">
+        <div id="empty-plain" class="empty">暂无通知</div>
+        <div id="empty-state" class="hidden">
+          <svg id="fireworks" viewBox="0 0 460 250" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div id="praise"></div>
+          <div id="stats"></div>
+        </div>
+      </div>
+      <div id="footer">
+        <button id="clear-all-btn">全部清理</button>
+      </div>
+    </div>
+  </div>
+  <div id="tooltip"></div>
+  <div id="trash-modal" class="hidden">
+    <div id="trash-box">
+      <div id="trash-header">
+        <span>回收站</span>
+        <button id="trash-close" title="关闭 (Esc)">✕</button>
+      </div>
+      <div id="trash-list"></div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

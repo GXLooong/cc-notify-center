@@ -1,0 +1,12 @@
+# 依赖
+node_modules/
+
+# 本地数据(通知流水/闭环记录/任务/窗口配置——含个人隐私,禁止入库)
+data/
+
+# 音效文件:复制自 Windows 系统(C:\Windows\Media),有版权,不入库(见 assets/README.md)
+assets/notify.wav
+
+# 临时/日志
+*.log
+*.tmp

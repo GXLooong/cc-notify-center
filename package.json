@@ -1,0 +1,13 @@
+{
+  "name": "cc-notify-center",
+  "version": "1.0.0",
+  "description": "Claude Code 通知聚合浮窗:所有 CC 任务完成通知集中为条目列表,Alt+Q 唤出",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.0.0"
+  }
+}
