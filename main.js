@@ -16,6 +16,7 @@ const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');            // 任务记录
 
 let mainWindow = null;
 let tray = null;
+let isQuitting = false; // before-quit 置位;区分"托盘退出"与"点关闭按钮"
 let notifications = []; // [{id, ts, project, prompt, session_id}]
 let doneSet = new Set();
 let tasks = [];         // 任务记录:今日(today)在前,长期(longterm)在后
@@ -196,6 +197,10 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       bounds: b,
       snapped: snapped,
+      visible: mainWindow.isVisible(),
+      minimized: mainWindow.isMinimized(),
+      alwaysOnTop: mainWindow.isAlwaysOnTop(),
+      altQRegistered: globalShortcut.isRegistered('Alt+Q'),
       matchedDisplay: screen.getDisplayMatching(b).id,
       displays,
     }));
@@ -214,6 +219,23 @@ const server = http.createServer((req, res) => {
         res.end('bad json');
       }
     });
+  } else if (req.method === 'POST' && req.url === '/debug/toggle') {
+    // 调试:模拟 Alt+Q 切换显示/隐藏(诊断唤出问题)
+    toggleWindow();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ visible: mainWindow.isVisible(), bounds: mainWindow.getBounds() }));
+  } else if (req.method === 'POST' && req.url === '/debug/close') {
+    // 调试:模拟用户点"—"(渲染层 window.close() → 主进程拦截为 hide)
+    mainWindow.webContents.executeJavaScript('window.close(); "closing"').catch(() => {});
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ visible: mainWindow.isVisible(), destroyed: mainWindow.isDestroyed() }));
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ visible: false, destroyed: true, note: '窗口被销毁而非隐藏!' }));
+      }
+    }, 500);
   } else {
     res.writeHead(404);
     res.end();
@@ -416,7 +438,10 @@ function ensureOnScreen() {
 }
 
 function toggleWindow() {
-  if (!mainWindow) return;
+  // 窗口可能已被销毁(渲染层 window.close() 在部分路径会真销毁而非隐藏)→ 重建
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
@@ -453,7 +478,7 @@ function createWindow() {
   mainWindow.loadFile('renderer.html');
 
   mainWindow.on('close', (e) => {
-    if (!app.isQuitting) {
+    if (!isQuitting) {
       e.preventDefault();
       mainWindow.hide();
     }
@@ -467,10 +492,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    toggleWindow(); // 兼容窗口已销毁的情况(toggleWindow 内部会重建)
   });
 
   app.whenReady().then(() => {
@@ -493,6 +515,13 @@ if (!app.requestSingleInstanceLock()) {
       console.log(`[cc-notify-center] 监听 http://127.0.0.1:${PORT}/notify`);
     });
   });
+
+  app.on('before-quit', () => {
+    isQuitting = true; // 托盘"退出"走 app.quit():放行 close,不再拦截
+  });
+
+  // 窗口被销毁(点"—"的渲染层 close 路径可能真销毁)时保持进程存活,托盘常驻
+  app.on('window-all-closed', () => {});
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
