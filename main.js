@@ -395,11 +395,32 @@ function updateTray() {
 }
 
 // ---------- 窗口 ----------
+// 确保窗口落在至少一块显示器上:第二屏断开/关闭后,停在消失屏幕坐标的窗口会"不可见"
+function ensureOnScreen() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const b = mainWindow.getBounds();
+  const intersects = screen.getAllDisplays().some((d) => {
+    const db = d.bounds;
+    return b.x < db.x + db.width && b.x + b.width > db.x &&
+           b.y < db.y + db.height && b.y + b.height > db.y;
+  });
+  if (!intersects) {
+    const wa = screen.getPrimaryDisplay().workArea;
+    mainWindow.setBounds({
+      x: wa.x + wa.width - b.width - 40,
+      y: wa.y + 40,
+      width: b.width,
+      height: b.height,
+    });
+  }
+}
+
 function toggleWindow() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
+    ensureOnScreen();
     mainWindow.show();
     mainWindow.focus();
   }
@@ -464,6 +485,9 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     createTray();
     updateTray();
+    ensureOnScreen(); // 启动时窗口可能停在已消失的屏幕坐标上
+
+    screen.on('display-removed', ensureOnScreen); // 拔屏/关屏瞬间自动救回
 
     server.listen(PORT, '127.0.0.1', () => {
       console.log(`[cc-notify-center] 监听 http://127.0.0.1:${PORT}/notify`);
