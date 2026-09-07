@@ -162,6 +162,58 @@ const server = http.createServer((req, res) => {
     // 调试/自检接口
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ unread: notifications, stats: getStats(), tasks, trash_count: tasks.filter((t) => t.deleted_at).length }));
+  } else if (req.method === 'GET' && req.url === '/debug/dom') {
+    // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript(
+        "[...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''}))"
+      ).then((items) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(items));
+      }).catch((err) => {
+        res.writeHead(500);
+        res.end(String(err));
+      });
+    } else {
+      res.writeHead(503);
+      res.end('no window');
+    }
+  } else if (req.method === 'GET' && new URL(req.url, 'http://x').pathname === '/debug/win') {
+    // 调试:窗口边界 + 全部显示器信息 + 当前匹配屏(多屏贴靠诊断用)
+    // 可选 ?snap=<mode> 程序化触发贴靠并返回落点(多屏回归验证用)
+    const url = new URL(req.url, 'http://x');
+    const snapMode = url.searchParams.get('snap');
+    let snapped = null;
+    if (snapMode) snapped = doSnap(snapMode);
+    const displays = screen.getAllDisplays().map((d) => ({
+      id: d.id,
+      primary: d.id === screen.getPrimaryDisplay().id,
+      bounds: d.bounds,
+      workArea: d.workArea,
+    }));
+    const b = mainWindow.getBounds();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      bounds: b,
+      snapped: snapped,
+      matchedDisplay: screen.getDisplayMatching(b).id,
+      displays,
+    }));
+  } else if (req.method === 'POST' && req.url === '/debug/win') {
+    // 调试:程序化移动/缩放窗口 {x,y,width,height}
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      try {
+        const b = JSON.parse(body);
+        mainWindow.setBounds(b);
+        res.writeHead(200);
+        res.end('ok');
+      } catch {
+        res.writeHead(400);
+        res.end('bad json');
+      }
+    });
   } else {
     res.writeHead(404);
     res.end();
@@ -185,10 +237,12 @@ ipcMain.on('clear-all', () => {
 ipcMain.handle('get-notifications', () => notifications);
 ipcMain.handle('get-stats', () => getStats());
 
-// ---------- 窗口贴靠(6 种落位,由悬浮菜单选择) ----------
-ipcMain.on('snap-window', (_e, mode) => {
-  if (!mainWindow) return;
-  const wa = screen.getPrimaryDisplay().workArea; // 排除任务栏的工作区
+// ---------- 窗口贴靠(6 种落位,由悬浮菜单选择;相对浮窗当前所在屏幕) ----------
+function doSnap(mode) {
+  if (!mainWindow) return null;
+  // 多屏:按浮窗当前所在屏幕计算(取与窗口重叠面积最大的显示器),而非主屏
+  const display = screen.getDisplayMatching(mainWindow.getBounds());
+  const wa = display.workArea; // 排除任务栏的工作区
   const halfW = Math.floor(wa.width / 2);
   const halfH = Math.floor(wa.height / 2);
   const map = {
@@ -205,7 +259,10 @@ ipcMain.on('snap-window', (_e, mode) => {
     mainWindow.setBounds(map[mode]);
     queueSaveConfig();
   }
-});
+  return map[mode] || null;
+}
+
+ipcMain.on('snap-window', (_e, mode) => doSnap(mode));
 
 // ---------- 置顶开关 ----------
 ipcMain.handle('get-always-top', () => (mainWindow ? mainWindow.isAlwaysOnTop() : true));
