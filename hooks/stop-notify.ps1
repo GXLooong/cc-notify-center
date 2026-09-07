@@ -19,6 +19,20 @@ if ($hookData.stop_hook_active -eq $true) {
 $project = $hookData.cwd
 if (-not $project) { $project = $env:CLAUDE_PROJECT_DIR }
 
+# cwd 会随会话内 Bash cd 漂移(如 cd 进子目录后 Stop 上报子目录,浮窗"项目"显示错乱)
+# 项目归属应稳定:转录头部消息行(前 20 行内)的 cwd = 会话启动时的项目根;首行可能是无 cwd 的元数据行
+try {
+    if ($hookData.transcript_path -and (Test-Path $hookData.transcript_path)) {
+        $head = Get-Content $hookData.transcript_path -TotalCount 20 -Encoding UTF8
+        foreach ($line in $head) {
+            try {
+                $o = $line | ConvertFrom-Json
+                if ($o.cwd) { $project = $o.cwd; break }
+            } catch {}
+        }
+    }
+} catch {}
+
 # 触发 prompt:优先 stdin 的 prompt 字段;为空则从 transcript 兜底取最后一条用户文本
 $prompt = $hookData.prompt
 
