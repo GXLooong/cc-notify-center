@@ -189,21 +189,28 @@ const server = http.createServer((req, res) => {
     const displays = screen.getAllDisplays().map((d) => ({
       id: d.id,
       primary: d.id === screen.getPrimaryDisplay().id,
+      scaleFactor: d.scaleFactor,
       bounds: d.bounds,
       workArea: d.workArea,
     }));
     const b = mainWindow.getBounds();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      bounds: b,
-      snapped: snapped,
-      visible: mainWindow.isVisible(),
-      minimized: mainWindow.isMinimized(),
-      alwaysOnTop: mainWindow.isAlwaysOnTop(),
-      altQRegistered: globalShortcut.isRegistered('Alt+Q'),
-      matchedDisplay: screen.getDisplayMatching(b).id,
-      displays,
-    }));
+    const send = (vp) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        bounds: b,
+        snapped: snapped,
+        viewport: vp,
+        visible: mainWindow.isVisible(),
+        minimized: mainWindow.isMinimized(),
+        alwaysOnTop: mainWindow.isAlwaysOnTop(),
+        altQRegistered: globalShortcut.isRegistered('Alt+Q'),
+        matchedDisplay: screen.getDisplayMatching(b).id,
+        displays,
+      }));
+    };
+    mainWindow.webContents.executeJavaScript('({iw: window.innerWidth, ih: window.innerHeight})', true)
+      .then(send)
+      .catch(() => send(null));
   } else if (req.method === 'POST' && req.url === '/debug/win') {
     // 调试:程序化移动/缩放窗口 {x,y,width,height}
     let body = '';
@@ -278,7 +285,12 @@ function doSnap(mode) {
     br: { x: wa.x + halfW, y: wa.y + halfH, width: wa.width - halfW, height: wa.height - halfH },
   };
   if (map[mode]) {
+    // 贴靠尺寸必须精确(四角可能小于 minHeight,被钳制会探出工作区压到任务栏)
+    // 落位前临时解除最小尺寸,落位后恢复(恢复不影响已 setBounds 的尺寸)
+    const prevMin = mainWindow.getMinimumSize();
+    mainWindow.setMinimumSize(0, 0);
     mainWindow.setBounds(map[mode]);
+    mainWindow.setMinimumSize(prevMin[0], prevMin[1]);
     queueSaveConfig();
   }
   return map[mode] || null;
