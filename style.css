@@ -192,11 +192,18 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #34343f;
   background: #202029;
   padding: 6px 8px;
   gap: 4px;
 }
+#divider {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: #34343f;
+}
+#divider:hover, body.divider-dragging #divider { background: #4a9eff; }
+body.divider-dragging { cursor: col-resize; user-select: none; }
 #notify-panel {
   flex: 1;
   min-width: 0;

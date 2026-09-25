@@ -243,6 +243,41 @@ document.getElementById('hide-btn').addEventListener('click', () => {
   window.close();
 });
 
+// ---------- 左右栏分界线拖动 ----------
+const divider = document.getElementById('divider');
+const tasksPanel = document.getElementById('tasks-panel');
+let dividerDrag = null;
+
+divider.addEventListener('mousedown', (e) => {
+  dividerDrag = { startX: e.clientX, startW: tasksPanel.getBoundingClientRect().width };
+  document.body.classList.add('divider-dragging');
+  e.preventDefault();
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dividerDrag) return;
+  const max = window.innerWidth - 420; // 右栏保底宽度
+  const w = Math.max(240, Math.min(max, dividerDrag.startW + (e.clientX - dividerDrag.startX)));
+  tasksPanel.style.width = w + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!dividerDrag) return;
+  dividerDrag = null;
+  document.body.classList.remove('divider-dragging');
+  localStorage.setItem('panelWidth', parseInt(tasksPanel.style.width, 10));
+});
+divider.addEventListener('dblclick', () => {
+  tasksPanel.style.width = '320px';
+  localStorage.setItem('panelWidth', '320');
+});
+// 初始化:恢复上次栏宽(窗口变窄时按上限收敛)
+(() => {
+  const saved = parseInt(localStorage.getItem('panelWidth'), 10);
+  if (saved) {
+    const max = window.innerWidth - 420;
+    tasksPanel.style.width = Math.max(240, Math.min(max, saved)) + 'px';
+  }
+})();
+
 // ================= 任务记录面板 =================
 const todayZone = document.getElementById('today-zone');
 const longtermZone = document.getElementById('longterm-zone');

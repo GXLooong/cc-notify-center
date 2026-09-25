@@ -167,8 +167,9 @@ const server = http.createServer((req, res) => {
     // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(
-        "[...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''}))"
-      ).then((items) => {
+        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider')})"
+      ).then((raw) => {
+        const items = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(items));
       }).catch((err) => {
