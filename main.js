@@ -2,7 +2,7 @@
 // 职责:HTTP 接收 CC Stop hook 的通知 POST → 持久化 JSONL → 广播给渲染层
 //      托盘常驻、Alt+Q 全局热键、窗口位置记忆、单实例锁
 // 闭环语义:条目离开列表即闭环(手动点击/被同会话新通知顶替/全部清理),记录到 done.jsonl 供统计
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, dialog } = require('electron');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -167,7 +167,7 @@ const server = http.createServer((req, res) => {
     // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(
-        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent})"
+        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal')})"
       ).then((raw) => {
         const items = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -227,6 +227,11 @@ const server = http.createServer((req, res) => {
         res.end('bad json');
       }
     });
+  } else if (req.method === 'POST' && req.url === '/debug/reset-title') {
+    // 调试:清除标题自定义(回到通用默认)
+    mainWindow.webContents.executeJavaScript("localStorage.removeItem('appTitle'); location.reload(); 'ok'")
+      .then(() => { res.writeHead(200); res.end('ok'); })
+      .catch(() => { res.writeHead(500); res.end('fail'); });
   } else if (req.method === 'POST' && req.url === '/debug/dup') {
     // 调试:触发任务复制 {id}(自动验证用)
     let body = '';
@@ -349,6 +354,23 @@ ipcMain.handle('tasks:update', (_e, { id, title, content }) => {
   if (content !== undefined) t.content = String(content);
   saveTasks();
   return t;
+});
+
+// ---------- 音效:上传(复制到 data/sounds,不入仓库) ----------
+ipcMain.handle('sound:pick', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: '选择音效文件',
+    properties: ['openFile'],
+    filters: [{ name: '音频', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'] }],
+  });
+  if (r.canceled || !r.filePaths.length) return null;
+  const src = r.filePaths[0];
+  const dir = path.join(DATA_DIR, 'sounds');
+  fs.mkdirSync(dir, { recursive: true });
+  const safeName = path.basename(src).replace(/[^\w.\-一-龥]/g, '_');
+  const destName = `${Date.now()}-${safeName}`;
+  fs.copyFileSync(src, path.join(dir, destName));
+  return { name: path.basename(src), file: `data/sounds/${destName}` };
 });
 
 // 复制任务:同区新增,标题加 copied- 前缀(副本为新任务,不带完成状态)

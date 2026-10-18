@@ -94,6 +94,123 @@ body {
 }
 #pin-btn:hover { color: #fff; background: #3a3a4a; }
 #pin-btn.pinned { background: #2a3a52; color: #8ab8e8; }
+#settings-btn {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  color: #9a9aab;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+#settings-btn:hover { color: #fff; background: #3a3a4a; }
+
+/* ---------- 设置弹窗 ---------- */
+#settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#settings-modal.hidden { display: none; }
+#settings-box {
+  width: 92%;
+  max-width: 520px;
+  max-height: 82%;
+  background: #23232e;
+  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+#settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #34343f;
+  font-weight: 600;
+  font-size: 13px;
+}
+#settings-close {
+  background: none;
+  border: none;
+  color: #9a9aab;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+#settings-close:hover { color: #fff; background: #3a3a4a; }
+#settings-body { display: flex; min-height: 260px; }
+#settings-tabs {
+  width: 110px;
+  flex-shrink: 0;
+  border-right: 1px solid #34343f;
+  padding: 8px 6px;
+  background: #202029;
+}
+.settings-tab {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #9a9aab;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 3px;
+}
+.settings-tab:hover { color: #fff; background: #2a2a35; }
+.settings-tab.active { color: #8ab8e8; background: #2a3a52; }
+#settings-content { flex: 1; padding: 12px; overflow-y: auto; }
+.settings-section-title { color: #8f8fa3; font-size: 11px; letter-spacing: 1px; margin-bottom: 8px; }
+#sound-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.sound-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #26262f;
+  border: 1px solid #2e2e3a;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.sound-item:hover { background: #2e2e3a; }
+.sound-item.active { border-color: #4a9eff; background: rgba(74, 158, 255, 0.08); }
+.sound-check { color: #4a9eff; width: 14px; flex-shrink: 0; }
+.sound-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sound-play {
+  flex-shrink: 0;
+  background: #2a3a52;
+  color: #8ab8e8;
+  border: 1px solid #3a5a82;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.sound-play:hover { background: #3a5a82; color: #fff; }
+.settings-actions { display: flex; gap: 8px; }
+.settings-actions button {
+  background: #26262f;
+  color: #b8b8c8;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.settings-actions button:hover { color: #fff; border-color: #4a4a5a; }
+.settings-hint { color: #6a6a7a; font-size: 11px; margin-top: 10px; line-height: 1.5; }
 #snap-flyout {
   position: absolute;
   right: 0;

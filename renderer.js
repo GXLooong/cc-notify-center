@@ -8,7 +8,32 @@ const emptyPlain = document.getElementById('empty-plain');
 const emptyState = document.getElementById('empty-state');
 const praiseEl = document.getElementById('praise');
 const statsEl = document.getElementById('stats');
-const audio = new Audio('assets/notify.wav');
+// ---------- 音效系统:内置 + 用户上传(本地) ----------
+const BUILTIN_SOUNDS = [
+  { id: 'system', name: '系统通知音', file: 'assets/notify.wav' },
+  { id: 'lulu', name: '噜,活干完了~', file: 'assets/sounds/lulu.mp3' },
+];
+const DEFAULT_SOUND = 'system';
+
+function getCustomSounds() {
+  try { return JSON.parse(localStorage.getItem('customSounds') || '[]'); } catch { return []; }
+}
+function saveCustomSounds(list) { localStorage.setItem('customSounds', JSON.stringify(list)); }
+function currentSoundKey() { return localStorage.getItem('soundChoice') || DEFAULT_SOUND; }
+function soundByKey(key) {
+  if (key && key.startsWith('custom:')) {
+    const file = key.slice(7);
+    return getCustomSounds().find((s) => s.file === file) || null;
+  }
+  return BUILTIN_SOUNDS.find((s) => s.id === key) || null;
+}
+function playSoundFile(file) {
+  try { new Audio(encodeURI(file)).play().catch(() => {}); } catch { /* 缺文件时静默 */ }
+}
+function playNotificationSound() {
+  const s = soundByKey(currentSoundKey());
+  playSoundFile(s ? s.file : BUILTIN_SOUNDS[0].file);
+}
 
 const PRAISES = [
   '全部闭环!今天的你又推进了不少 🎉',
@@ -223,7 +248,7 @@ window.api.getNotifications().then((items) => {
 
 window.api.onNotification((n, replacedIds) => {
   addItem(n, replacedIds);
-  audio.play().catch(() => {}); // 需求:保留 Windows 系统弹窗音效
+  playNotificationSound(); // 用户可配置的音效(默认系统通知音)
 });
 
 // ---------- 底部 ----------
@@ -280,6 +305,72 @@ titleEl.addEventListener('dblclick', () => {
     else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   });
   input.addEventListener('blur', () => finish(true)); // 失焦自动保存
+});
+
+// ---------- 设置面板(提示音 tab) ----------
+const settingsModal = document.getElementById('settings-modal');
+const soundListEl = document.getElementById('sound-list');
+
+function renderSoundList() {
+  const cur = currentSoundKey();
+  const items = [
+    ...BUILTIN_SOUNDS.map((s) => ({ key: s.id, name: s.name, file: s.file })),
+    ...getCustomSounds().map((s) => ({ key: 'custom:' + s.file, name: s.name, file: s.file })),
+  ];
+  soundListEl.textContent = '';
+  items.forEach((it) => {
+    const el = document.createElement('div');
+    el.className = 'sound-item' + (it.key === cur ? ' active' : '');
+    el.dataset.key = it.key;
+
+    const check = document.createElement('span');
+    check.className = 'sound-check';
+    check.textContent = it.key === cur ? '✓' : '';
+
+    const name = document.createElement('span');
+    name.className = 'sound-name';
+    name.textContent = it.name;
+
+    const playBtn = document.createElement('button');
+    playBtn.className = 'sound-play';
+    playBtn.textContent = '▶ 试听';
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playSoundFile(it.file);
+    });
+
+    el.addEventListener('click', () => {
+      localStorage.setItem('soundChoice', it.key);
+      renderSoundList();
+    });
+    el.append(check, name, playBtn);
+    soundListEl.append(el);
+  });
+}
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  settingsModal.classList.remove('hidden');
+  renderSoundList();
+});
+document.getElementById('settings-close').addEventListener('click', () => settingsModal.classList.add('hidden'));
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) settingsModal.classList.add('hidden');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) settingsModal.classList.add('hidden');
+});
+document.getElementById('sound-upload').addEventListener('click', async () => {
+  const picked = await window.api.pickSound(); // 主进程复制到 data/sounds,不入 git
+  if (!picked) return;
+  const list = getCustomSounds();
+  list.push({ name: picked.name, file: picked.file });
+  saveCustomSounds(list);
+  localStorage.setItem('soundChoice', 'custom:' + picked.file);
+  renderSoundList();
+});
+document.getElementById('sound-reset').addEventListener('click', () => {
+  localStorage.removeItem('soundChoice');
+  renderSoundList();
 });
 
 // ---------- 左右栏分界线拖动 ----------
