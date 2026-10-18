@@ -243,6 +243,45 @@ document.getElementById('hide-btn').addEventListener('click', () => {
   window.close();
 });
 
+// ---------- 标题双击重命名 ----------
+const titleEl = document.getElementById('title');
+const DEFAULT_TITLE = '今天干什么';
+
+function applyTitle(name) {
+  const n = String(name || '').trim() || DEFAULT_TITLE;
+  titleEl.textContent = n;
+  document.title = n;
+  localStorage.setItem('appTitle', n);
+}
+applyTitle(localStorage.getItem('appTitle') || DEFAULT_TITLE);
+
+titleEl.addEventListener('dblclick', () => {
+  if (titleEl.querySelector('input')) return;
+  const origin = titleEl.textContent;
+  const input = document.createElement('input');
+  input.className = 'title-input';
+  input.value = origin;
+  input.maxLength = 40;
+  titleEl.textContent = '';
+  titleEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  let finished = false;
+  const finish = (save) => {
+    if (finished) return;
+    finished = true;
+    const val = input.value;
+    titleEl.textContent = '';
+    applyTitle(save ? val : origin);
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true)); // 失焦自动保存
+});
+
 // ---------- 左右栏分界线拖动 ----------
 const divider = document.getElementById('divider');
 const tasksPanel = document.getElementById('tasks-panel');
