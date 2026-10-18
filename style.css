@@ -96,6 +96,9 @@ body {
 #pin-btn.pinned { background: #2a3a52; color: #8ab8e8; }
 #settings-btn {
   -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   color: #9a9aab;
@@ -211,6 +214,33 @@ body {
 }
 .settings-actions button:hover { color: #fff; border-color: #4a4a5a; }
 .settings-hint { color: #6a6a7a; font-size: 11px; margin-top: 10px; line-height: 1.5; }
+
+/* 设置底部确认/取消 */
+#settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #34343f;
+}
+#settings-footer button {
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 5px 16px;
+  cursor: pointer;
+}
+#settings-cancel {
+  background: #26262f;
+  color: #b8b8c8;
+  border: 1px solid #3a3a4a;
+}
+#settings-cancel:hover { color: #fff; border-color: #4a4a5a; }
+#settings-confirm {
+  background: #2a3a52;
+  color: #8ab8e8;
+  border: 1px solid #3a5a82;
+}
+#settings-confirm:hover { background: #3a5a82; color: #fff; }
 #snap-flyout {
   position: absolute;
   right: 0;

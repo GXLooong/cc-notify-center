@@ -11,7 +11,8 @@ const statsEl = document.getElementById('stats');
 // ---------- 音效系统:内置 + 用户上传(本地) ----------
 const BUILTIN_SOUNDS = [
   { id: 'system', name: '系统通知音', file: 'assets/notify.wav' },
-  { id: 'lulu', name: '噜,活干完了~', file: 'assets/sounds/lulu.mp3' },
+  { id: 'lulu', name: '噜噜，活干完了~', file: 'assets/sounds/lulu.mp3' },
+  { id: 'lumei', name: '噜妹，活干完了~', file: 'assets/sounds/lumei.mp3' },
 ];
 const DEFAULT_SOUND = 'system';
 
@@ -310,22 +311,52 @@ titleEl.addEventListener('dblclick', () => {
 // ---------- 设置面板(提示音 tab) ----------
 const settingsModal = document.getElementById('settings-modal');
 const soundListEl = document.getElementById('sound-list');
+let pendingKey = currentSoundKey(); // 弹窗内的待确认选择(确认后才写 localStorage)
+let previewAudio = null;
+let previewKey = null;
+
+function stopPreview() {
+  if (previewAudio) {
+    try { previewAudio.pause(); previewAudio.currentTime = 0; } catch { /* ignore */ }
+  }
+  previewAudio = null;
+  previewKey = null;
+  renderSoundList();
+}
+
+function startPreview(key, file) {
+  if (previewAudio) {
+    try { previewAudio.pause(); } catch { /* ignore */ }
+  }
+  const a = new Audio(encodeURI(file));
+  previewAudio = a;
+  previewKey = key;
+  a.addEventListener('ended', () => {
+    if (previewAudio === a) {
+      previewAudio = null;
+      previewKey = null;
+      renderSoundList();
+    }
+  });
+  a.play().catch(() => {});
+  renderSoundList();
+}
 
 function renderSoundList() {
-  const cur = currentSoundKey();
   const items = [
     ...BUILTIN_SOUNDS.map((s) => ({ key: s.id, name: s.name, file: s.file })),
     ...getCustomSounds().map((s) => ({ key: 'custom:' + s.file, name: s.name, file: s.file })),
   ];
   soundListEl.textContent = '';
   items.forEach((it) => {
+    const playing = previewKey === it.key && !!previewAudio;
     const el = document.createElement('div');
-    el.className = 'sound-item' + (it.key === cur ? ' active' : '');
+    el.className = 'sound-item' + (it.key === pendingKey ? ' active' : '');
     el.dataset.key = it.key;
 
     const check = document.createElement('span');
     check.className = 'sound-check';
-    check.textContent = it.key === cur ? '✓' : '';
+    check.textContent = it.key === pendingKey ? '✓' : '';
 
     const name = document.createElement('span');
     name.className = 'sound-name';
@@ -333,31 +364,46 @@ function renderSoundList() {
 
     const playBtn = document.createElement('button');
     playBtn.className = 'sound-play';
-    playBtn.textContent = '▶ 试听';
+    playBtn.textContent = playing ? '⏸ 暂停播放' : '▶ 试听';
     playBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      playSoundFile(it.file);
+      if (previewKey === it.key && previewAudio) stopPreview();
+      else startPreview(it.key, it.file);
     });
 
+    // 点击条目 = 选中(待确认) + 默认预览播放
     el.addEventListener('click', () => {
-      localStorage.setItem('soundChoice', it.key);
-      renderSoundList();
+      pendingKey = it.key;
+      if (previewKey !== it.key || !previewAudio) startPreview(it.key, it.file);
+      else renderSoundList();
     });
     el.append(check, name, playBtn);
     soundListEl.append(el);
   });
 }
 
-document.getElementById('settings-btn').addEventListener('click', () => {
+function openSettings() {
+  pendingKey = currentSoundKey();
   settingsModal.classList.remove('hidden');
   renderSoundList();
-});
-document.getElementById('settings-close').addEventListener('click', () => settingsModal.classList.add('hidden'));
+}
+
+function closeSettings(apply) {
+  if (apply) localStorage.setItem('soundChoice', pendingKey);
+  else pendingKey = currentSoundKey();
+  stopPreview();
+  settingsModal.classList.add('hidden');
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-confirm').addEventListener('click', () => closeSettings(true));
+document.getElementById('settings-cancel').addEventListener('click', () => closeSettings(false));
+document.getElementById('settings-close').addEventListener('click', () => closeSettings(false));
 settingsModal.addEventListener('click', (e) => {
-  if (e.target === settingsModal) settingsModal.classList.add('hidden');
+  if (e.target === settingsModal) closeSettings(false);
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) settingsModal.classList.add('hidden');
+  if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) closeSettings(false);
 });
 document.getElementById('sound-upload').addEventListener('click', async () => {
   const picked = await window.api.pickSound(); // 主进程复制到 data/sounds,不入 git
@@ -365,11 +411,11 @@ document.getElementById('sound-upload').addEventListener('click', async () => {
   const list = getCustomSounds();
   list.push({ name: picked.name, file: picked.file });
   saveCustomSounds(list);
-  localStorage.setItem('soundChoice', 'custom:' + picked.file);
+  pendingKey = 'custom:' + picked.file; // 待确认
   renderSoundList();
 });
 document.getElementById('sound-reset').addEventListener('click', () => {
-  localStorage.removeItem('soundChoice');
+  pendingKey = 'system'; // 待确认,不立即生效
   renderSoundList();
 });
 
