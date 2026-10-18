@@ -296,6 +296,18 @@ body {
   cursor: pointer;
 }
 #sound-editor-pick:hover { background: #3a5a82; color: #fff; }
+#sound-editor-preview {
+  flex-shrink: 0;
+  background: #26262f;
+  color: #b8b8c8;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+#sound-editor-preview:hover { color: #fff; border-color: #4a4a5a; }
+#sound-editor-preview.hidden { display: none; }
 .sound-editor-footer {
   display: flex;
   justify-content: flex-end;

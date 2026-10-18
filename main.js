@@ -3,6 +3,7 @@
 //      托盘常驻、Alt+Q 全局热键、窗口位置记忆、单实例锁
 // 闭环语义:条目离开列表即闭环(手动点击/被同会话新通知顶替/全部清理),记录到 done.jsonl 供统计
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, dialog } = require('electron');
+const { pathToFileURL } = require('url');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -167,7 +168,7 @@ const server = http.createServer((req, res) => {
     // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(
-        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal'), soundEditor: !!document.getElementById('sound-editor-modal'), soundCount: (typeof allSoundItems === 'function' ? allSoundItems().length : -1)})"
+        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal'), soundEditor: !!document.getElementById('sound-editor-modal'), editorPreviewBtn: !!document.getElementById('sound-editor-preview'), soundCount: (typeof allSoundItems === 'function' ? allSoundItems().length : -1)})"
       ).then((raw) => {
         const items = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -365,7 +366,7 @@ ipcMain.handle('sound:choose', async () => {
   });
   if (r.canceled || !r.filePaths.length) return null;
   const src = r.filePaths[0];
-  return { path: src, name: path.basename(src) };
+  return { path: src, name: path.basename(src), url: pathToFileURL(src).href }; // url 供选择后立即试听
 });
 
 ipcMain.handle('sound:import', (_e, src) => {

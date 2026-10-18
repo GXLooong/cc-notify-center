@@ -441,32 +441,71 @@ document.getElementById('sound-reset').addEventListener('click', () => {
 
 // ---------- 音效创建/编辑弹窗 ----------
 const soundEditorModal = document.getElementById('sound-editor-modal');
-let editorTarget = null;   // 正在编辑的条目;null=新建
+let editorTarget = null;     // 正在编辑的条目;null=新建
 let editorPickedPath = null; // 新选择的文件路径(保存时才导入)
+let editorPickedUrl = null;  // 新选择文件的 file:// URL(选择后立即试听)
+let editorPreviewAudio = null;
+
+function stopEditorPreview() {
+  if (editorPreviewAudio) {
+    try { editorPreviewAudio.pause(); editorPreviewAudio.currentTime = 0; } catch { /* ignore */ }
+    editorPreviewAudio = null;
+  }
+  updateEditorPreviewBtn();
+}
+
+function updateEditorPreviewBtn() {
+  const btn = document.getElementById('sound-editor-preview');
+  const playing = !!editorPreviewAudio;
+  const hasSource = !!editorPickedUrl || !!(editorTarget && editorTarget.file);
+  btn.textContent = playing ? '⏸ 暂停播放' : '▶ 试听';
+  btn.classList.toggle('hidden', !hasSource);
+}
+
+function toggleEditorPreview() {
+  if (editorPreviewAudio) { stopEditorPreview(); return; }
+  const src = editorPickedUrl || (editorTarget ? encodeURI(editorTarget.file) : null);
+  if (!src) return;
+  const a = new Audio(src);
+  editorPreviewAudio = a;
+  a.addEventListener('ended', () => {
+    if (editorPreviewAudio === a) { editorPreviewAudio = null; updateEditorPreviewBtn(); }
+  });
+  a.play().catch(() => {});
+  updateEditorPreviewBtn();
+}
 
 function openSoundEditor(item) {
+  stopEditorPreview();
   editorTarget = item || null;
   editorPickedPath = null;
+  editorPickedUrl = null;
   document.getElementById('sound-editor-title').textContent = item ? '编辑音效' : '新增音效';
   document.getElementById('sound-editor-name').value = item ? item.name : '';
   document.getElementById('sound-editor-file').textContent = item ? item.file.split('/').pop() : '未选择文件';
   soundEditorModal.classList.remove('hidden');
+  updateEditorPreviewBtn(); // 编辑已有条目:直接可试听当前音源
   document.getElementById('sound-editor-name').focus();
 }
 
 function closeSoundEditor() {
+  stopEditorPreview();
   soundEditorModal.classList.add('hidden');
   editorTarget = null;
   editorPickedPath = null;
+  editorPickedUrl = null;
 }
 
 async function pickSoundSource() {
   const picked = await window.api.chooseSound();
   if (!picked) return;
   editorPickedPath = picked.path;
+  editorPickedUrl = picked.url;
+  stopEditorPreview(); // 切换文件时停掉上一个试听
   document.getElementById('sound-editor-file').textContent = picked.name;
   const nameInput = document.getElementById('sound-editor-name');
   if (!nameInput.value.trim()) nameInput.value = picked.name.replace(/\.[^.]+$/, '');
+  updateEditorPreviewBtn();
 }
 
 async function saveSoundEditor() {
@@ -513,6 +552,7 @@ async function saveSoundEditor() {
 }
 
 document.getElementById('sound-editor-pick').addEventListener('click', pickSoundSource);
+document.getElementById('sound-editor-preview').addEventListener('click', toggleEditorPreview);
 document.getElementById('sound-editor-save').addEventListener('click', saveSoundEditor);
 document.getElementById('sound-editor-cancel').addEventListener('click', closeSoundEditor);
 document.getElementById('sound-editor-close').addEventListener('click', closeSoundEditor);
