@@ -311,6 +311,20 @@ function renderTask(t) {
   titleSpan.className = 'task-title';
   titleSpan.textContent = t.title;
 
+  // 复制任务:同区新增一条,标题加 copied- 前缀
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'task-copy';
+  copyBtn.textContent = '⧉';
+  copyBtn.title = '复制任务(同名加 copied- 前缀)';
+  copyBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const copy = await window.api.duplicateTask(t.id);
+    if (!copy) return;
+    const zone = copy.type === 'longterm' ? longtermZone : todayZone;
+    zone.append(renderTask(copy));
+    normalizeZone(zone); // 已完成条目沉底规则
+  });
+
   // 条目右侧直接删除(进回收站,可恢复,无需确认)
   const delRow = document.createElement('button');
   delRow.className = 'task-del-x';
@@ -344,7 +358,7 @@ function renderTask(t) {
     persistOrderFromDOM();
   });
 
-  row.append(chev, titleSpan, doneBtn, delRow);
+  row.append(chev, titleSpan, doneBtn, copyBtn, delRow);
   applyDoneState();
 
   // 展开编辑区

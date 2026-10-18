@@ -385,6 +385,19 @@ body.divider-dragging { cursor: col-resize; user-select: none; }
 }
 .task-del-x:hover { color: #ff7b8a; background: #3a2430; }
 
+/* 复制按钮:平时低亮度,hover 变蓝 */
+.task-copy {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #55555f;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+.task-copy:hover { color: #6aa9dd; background: #223248; }
+
 /* ---------- 完成/恢复按钮(悬浮才显现,绿色) ---------- */
 .task-done-btn {
   flex-shrink: 0;

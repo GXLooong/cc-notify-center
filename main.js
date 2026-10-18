@@ -227,6 +227,20 @@ const server = http.createServer((req, res) => {
         res.end('bad json');
       }
     });
+  } else if (req.method === 'POST' && req.url === '/debug/dup') {
+    // 调试:触发任务复制 {id}(自动验证用)
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      try {
+        const copy = duplicateTask(JSON.parse(body).id);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(copy || { error: 'not found' }));
+      } catch {
+        res.writeHead(400);
+        res.end('bad json');
+      }
+    });
   } else if (req.method === 'POST' && req.url === '/debug/toggle') {
     // 调试:模拟 Alt+Q 切换显示/隐藏(诊断唤出问题)
     toggleWindow();
@@ -336,6 +350,24 @@ ipcMain.handle('tasks:update', (_e, { id, title, content }) => {
   saveTasks();
   return t;
 });
+
+// 复制任务:同区新增,标题加 copied- 前缀(副本为新任务,不带完成状态)
+function duplicateTask(id) {
+  const t = tasks.find((x) => x.id === id);
+  if (!t) return null;
+  const copy = {
+    id: `t${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type: t.type,
+    title: 'copied-' + t.title,
+    content: t.content,
+    created_at: new Date().toISOString(),
+  };
+  tasks.push(copy);
+  saveTasks();
+  return copy;
+}
+
+ipcMain.handle('tasks:duplicate', (_e, id) => duplicateTask(id));
 
 // 删除进回收站:只打 deleted_at 标记,不物理删(可恢复)
 ipcMain.handle('tasks:delete', (_e, id) => {

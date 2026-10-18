@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   addTask: (t) => ipcRenderer.invoke('tasks:add', t),
   updateTask: (t) => ipcRenderer.invoke('tasks:update', t),
   setComplete: (p) => ipcRenderer.invoke('tasks:set-complete', p),
+  duplicateTask: (id) => ipcRenderer.invoke('tasks:duplicate', id),
   deleteTask: (id) => ipcRenderer.invoke('tasks:delete', id),
   restoreTask: (id) => ipcRenderer.invoke('tasks:restore', id),
   getTrash: () => ipcRenderer.invoke('tasks:get-trash'),
