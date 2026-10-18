@@ -167,7 +167,7 @@ const server = http.createServer((req, res) => {
     // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(
-        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal')})"
+        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal'), soundEditor: !!document.getElementById('sound-editor-modal'), soundCount: (typeof allSoundItems === 'function' ? allSoundItems().length : -1)})"
       ).then((raw) => {
         const items = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -356,8 +356,8 @@ ipcMain.handle('tasks:update', (_e, { id, title, content }) => {
   return t;
 });
 
-// ---------- 音效:上传(复制到 data/sounds,不入仓库) ----------
-ipcMain.handle('sound:pick', async () => {
+// ---------- 音效:选择(不复制) + 导入(复制到 data/sounds,不入仓库) ----------
+ipcMain.handle('sound:choose', async () => {
   const r = await dialog.showOpenDialog(mainWindow, {
     title: '选择音效文件',
     properties: ['openFile'],
@@ -365,6 +365,11 @@ ipcMain.handle('sound:pick', async () => {
   });
   if (r.canceled || !r.filePaths.length) return null;
   const src = r.filePaths[0];
+  return { path: src, name: path.basename(src) };
+});
+
+ipcMain.handle('sound:import', (_e, src) => {
+  if (!src || !fs.existsSync(src)) return null;
   const dir = path.join(DATA_DIR, 'sounds');
   fs.mkdirSync(dir, { recursive: true });
   const safeName = path.basename(src).replace(/[^\w.\-一-龥]/g, '_');

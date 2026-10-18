@@ -20,13 +20,29 @@ function getCustomSounds() {
   try { return JSON.parse(localStorage.getItem('customSounds') || '[]'); } catch { return []; }
 }
 function saveCustomSounds(list) { localStorage.setItem('customSounds', JSON.stringify(list)); }
+// 内置音效可编辑:名称/音源的覆盖项(不改仓库文件)
+function getBuiltinOverrides() {
+  try { return JSON.parse(localStorage.getItem('builtinOverrides') || '{}'); } catch { return {}; }
+}
+function saveBuiltinOverrides(o) { localStorage.setItem('builtinOverrides', JSON.stringify(o)); }
 function currentSoundKey() { return localStorage.getItem('soundChoice') || DEFAULT_SOUND; }
+
+// 全部音效条目(内置含覆盖项 + 自定义)
+function allSoundItems() {
+  const ov = getBuiltinOverrides();
+  return [
+    ...BUILTIN_SOUNDS.map((s) => ({
+      key: s.id,
+      builtin: s.id,
+      name: (ov[s.id] && ov[s.id].name) || s.name,
+      file: (ov[s.id] && ov[s.id].file) || s.file,
+    })),
+    ...getCustomSounds().map((s) => ({ key: 'custom:' + s.file, builtin: null, name: s.name, file: s.file })),
+  ];
+}
+
 function soundByKey(key) {
-  if (key && key.startsWith('custom:')) {
-    const file = key.slice(7);
-    return getCustomSounds().find((s) => s.file === file) || null;
-  }
-  return BUILTIN_SOUNDS.find((s) => s.id === key) || null;
+  return allSoundItems().find((s) => s.key === key) || null;
 }
 function playSoundFile(file) {
   try { new Audio(encodeURI(file)).play().catch(() => {}); } catch { /* 缺文件时静默 */ }
@@ -343,10 +359,7 @@ function startPreview(key, file) {
 }
 
 function renderSoundList() {
-  const items = [
-    ...BUILTIN_SOUNDS.map((s) => ({ key: s.id, name: s.name, file: s.file })),
-    ...getCustomSounds().map((s) => ({ key: 'custom:' + s.file, name: s.name, file: s.file })),
-  ];
+  const items = allSoundItems();
   soundListEl.textContent = '';
   items.forEach((it) => {
     const playing = previewKey === it.key && !!previewAudio;
@@ -361,6 +374,14 @@ function renderSoundList() {
     const name = document.createElement('span');
     name.className = 'sound-name';
     name.textContent = it.name;
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'sound-edit';
+    editBtn.textContent = '编辑';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSoundEditor(it);
+    });
 
     const playBtn = document.createElement('button');
     playBtn.className = 'sound-play';
@@ -377,7 +398,7 @@ function renderSoundList() {
       if (previewKey !== it.key || !previewAudio) startPreview(it.key, it.file);
       else renderSoundList();
     });
-    el.append(check, name, playBtn);
+    el.append(check, name, editBtn, playBtn);
     soundListEl.append(el);
   });
 }
@@ -392,6 +413,7 @@ function closeSettings(apply) {
   if (apply) localStorage.setItem('soundChoice', pendingKey);
   else pendingKey = currentSoundKey();
   stopPreview();
+  closeSoundEditor();
   settingsModal.classList.add('hidden');
 }
 
@@ -403,20 +425,102 @@ settingsModal.addEventListener('click', (e) => {
   if (e.target === settingsModal) closeSettings(false);
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) closeSettings(false);
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('sound-editor-modal').classList.contains('hidden')) {
+    closeSoundEditor();
+    return;
+  }
+  if (!settingsModal.classList.contains('hidden')) closeSettings(false);
 });
-document.getElementById('sound-upload').addEventListener('click', async () => {
-  const picked = await window.api.pickSound(); // 主进程复制到 data/sounds,不入 git
-  if (!picked) return;
-  const list = getCustomSounds();
-  list.push({ name: picked.name, file: picked.file });
-  saveCustomSounds(list);
-  pendingKey = 'custom:' + picked.file; // 待确认
-  renderSoundList();
-});
+// 「上传音效」= 打开创建窗口(名称 + 音源)
+document.getElementById('sound-upload').addEventListener('click', () => openSoundEditor(null));
 document.getElementById('sound-reset').addEventListener('click', () => {
   pendingKey = 'system'; // 待确认,不立即生效
   renderSoundList();
+});
+
+// ---------- 音效创建/编辑弹窗 ----------
+const soundEditorModal = document.getElementById('sound-editor-modal');
+let editorTarget = null;   // 正在编辑的条目;null=新建
+let editorPickedPath = null; // 新选择的文件路径(保存时才导入)
+
+function openSoundEditor(item) {
+  editorTarget = item || null;
+  editorPickedPath = null;
+  document.getElementById('sound-editor-title').textContent = item ? '编辑音效' : '新增音效';
+  document.getElementById('sound-editor-name').value = item ? item.name : '';
+  document.getElementById('sound-editor-file').textContent = item ? item.file.split('/').pop() : '未选择文件';
+  soundEditorModal.classList.remove('hidden');
+  document.getElementById('sound-editor-name').focus();
+}
+
+function closeSoundEditor() {
+  soundEditorModal.classList.add('hidden');
+  editorTarget = null;
+  editorPickedPath = null;
+}
+
+async function pickSoundSource() {
+  const picked = await window.api.chooseSound();
+  if (!picked) return;
+  editorPickedPath = picked.path;
+  document.getElementById('sound-editor-file').textContent = picked.name;
+  const nameInput = document.getElementById('sound-editor-name');
+  if (!nameInput.value.trim()) nameInput.value = picked.name.replace(/\.[^.]+$/, '');
+}
+
+async function saveSoundEditor() {
+  const name = document.getElementById('sound-editor-name').value.trim()
+    || (editorTarget ? editorTarget.name : '未命名音效');
+  let file = editorTarget ? editorTarget.file : null;
+  if (editorPickedPath) {
+    const imported = await window.api.importSound(editorPickedPath); // 保存时才复制到 data/sounds
+    if (!imported) return;
+    file = imported.file;
+  }
+  if (!file) {
+    alert('请先选择音源文件');
+    return;
+  }
+
+  if (editorTarget) {
+    if (editorTarget.builtin) {
+      // 内置音效:写覆盖项(不改仓库文件,可随时恢复默认)
+      const ov = getBuiltinOverrides();
+      ov[editorTarget.builtin] = { name, file };
+      saveBuiltinOverrides(ov);
+    } else {
+      // 自定义音效:更新条目;音源变了要同步引用它的 key
+      const list = getCustomSounds();
+      const oldFile = editorTarget.file;
+      const idx = list.findIndex((s) => s.file === oldFile);
+      if (idx >= 0) list[idx] = { name, file };
+      saveCustomSounds(list);
+      const oldKey = 'custom:' + oldFile;
+      const newKey = 'custom:' + file;
+      if (currentSoundKey() === oldKey) localStorage.setItem('soundChoice', newKey);
+      if (pendingKey === oldKey) pendingKey = newKey;
+    }
+  } else {
+    // 新建自定义音效
+    const list = getCustomSounds();
+    list.push({ name, file });
+    saveCustomSounds(list);
+    pendingKey = 'custom:' + file; // 待确认
+  }
+  closeSoundEditor();
+  renderSoundList();
+}
+
+document.getElementById('sound-editor-pick').addEventListener('click', pickSoundSource);
+document.getElementById('sound-editor-save').addEventListener('click', saveSoundEditor);
+document.getElementById('sound-editor-cancel').addEventListener('click', closeSoundEditor);
+document.getElementById('sound-editor-close').addEventListener('click', closeSoundEditor);
+soundEditorModal.addEventListener('click', (e) => {
+  if (e.target === soundEditorModal) closeSoundEditor();
+});
+document.getElementById('sound-editor-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveSoundEditor(); }
 });
 
 // ---------- 左右栏分界线拖动 ----------

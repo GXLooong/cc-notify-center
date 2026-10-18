@@ -80,6 +80,29 @@
     </div>
   </div>
   <div id="tooltip"></div>
+  <!-- 音效创建/编辑小窗 -->
+  <div id="sound-editor-modal" class="hidden">
+    <div id="sound-editor-box">
+      <div id="sound-editor-header">
+        <span id="sound-editor-title">新增音效</span>
+        <button id="sound-editor-close" title="关闭">✕</button>
+      </div>
+      <div class="sound-editor-body">
+        <label class="sound-editor-label">名称</label>
+        <input id="sound-editor-name" placeholder="音效名称" maxlength="40">
+        <label class="sound-editor-label">音源</label>
+        <div class="sound-editor-source">
+          <span id="sound-editor-file">未选择文件</span>
+          <button id="sound-editor-pick">选择音源</button>
+        </div>
+        <div class="settings-hint">支持 mp3 / wav / ogg / m4a / aac / flac;文件保存到本机 data/sounds,不入仓库。</div>
+      </div>
+      <div class="sound-editor-footer">
+        <button id="sound-editor-cancel">取消</button>
+        <button id="sound-editor-save">保存</button>
+      </div>
+    </div>
+  </div>
   <div id="settings-modal" class="hidden">
     <div id="settings-box">
       <div id="settings-header">

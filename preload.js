@@ -19,7 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   purgeTask: (id) => ipcRenderer.invoke('tasks:purge', id),
   reorderTasks: (order) => ipcRenderer.invoke('tasks:reorder', order),
   snapWindow: (mode) => ipcRenderer.send('snap-window', mode),
-  pickSound: () => ipcRenderer.invoke('sound:pick'),
+  chooseSound: () => ipcRenderer.invoke('sound:choose'),
+  importSound: (p) => ipcRenderer.invoke('sound:import', p),
   getAlwaysTop: () => ipcRenderer.invoke('get-always-top'),
   toggleAlwaysTop: () => ipcRenderer.invoke('toggle-always-top'),
 });
