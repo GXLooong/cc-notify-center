@@ -314,8 +314,13 @@ function renderTask(t) {
   // 复制任务:同区新增一条,标题加 copied- 前缀
   const copyBtn = document.createElement('button');
   copyBtn.className = 'task-copy';
-  copyBtn.textContent = '⧉';
-  copyBtn.title = '复制任务(同名加 copied- 前缀)';
+  // 内联 SVG 双矩形图标(与整体暗色 UI 统一,hover 变蓝)
+  copyBtn.innerHTML =
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  copyBtn.title = '复制任务(标题加 copied- 前缀)';
   copyBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const copy = await window.api.duplicateTask(t.id);
