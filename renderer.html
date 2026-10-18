@@ -96,7 +96,14 @@
           <button id="sound-editor-preview" class="hidden">▶ 试听</button>
           <button id="sound-editor-pick">选择音源</button>
         </div>
-        <div class="settings-hint">支持 mp3 / wav / ogg / m4a / aac / flac</div>
+        <div id="trim-editor" class="hidden">
+          <canvas id="trim-wave"></canvas>
+          <div id="trim-selection"></div>
+          <div id="trim-handle-left" class="trim-handle"></div>
+          <div id="trim-handle-right" class="trim-handle"></div>
+          <div id="trim-time"></div>
+        </div>
+        <div class="settings-hint">支持 mp3 / wav / ogg / m4a / aac / flac;拖动两侧手柄可截取片段</div>
       </div>
       <div class="sound-editor-footer">
         <button id="sound-editor-cancel">取消</button>

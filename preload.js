@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('api', {
   snapWindow: (mode) => ipcRenderer.send('snap-window', mode),
   chooseSound: () => ipcRenderer.invoke('sound:choose'),
   importSound: (p) => ipcRenderer.invoke('sound:import', p),
+  readSoundFile: (p) => ipcRenderer.invoke('sound:read', p),
+  saveSoundClip: (payload) => ipcRenderer.invoke('sound:save-clip', payload),
   getAlwaysTop: () => ipcRenderer.invoke('get-always-top'),
   toggleAlwaysTop: () => ipcRenderer.invoke('toggle-always-top'),
 });

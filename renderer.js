@@ -446,9 +446,25 @@ let editorPickedPath = null; // 新选择的文件路径(保存时才导入)
 let editorPickedUrl = null;  // 新选择文件的 file:// URL(选择后立即试听)
 let editorPreviewAudio = null;
 
+// 裁剪状态
+let trimBuffer = null;       // 解码后的 AudioBuffer
+let trimStart = 0;           // 0..1
+let trimEnd = 1;             // 0..1
+let trimDirty = false;       // 用户拖动过手柄 → 保存时生成切片
+let trimLoadToken = 0;       // 防止快速切换文件的加载竞态
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
 function stopEditorPreview() {
   if (editorPreviewAudio) {
-    try { editorPreviewAudio.pause(); editorPreviewAudio.currentTime = 0; } catch { /* ignore */ }
+    try {
+      if (typeof editorPreviewAudio.stop === 'function') editorPreviewAudio.stop(); // AudioBufferSourceNode
+      else { editorPreviewAudio.pause(); editorPreviewAudio.currentTime = 0; }      // HTMLAudioElement
+    } catch { /* ignore */ }
     editorPreviewAudio = null;
   }
   updateEditorPreviewBtn();
@@ -457,22 +473,174 @@ function stopEditorPreview() {
 function updateEditorPreviewBtn() {
   const btn = document.getElementById('sound-editor-preview');
   const playing = !!editorPreviewAudio;
-  const hasSource = !!editorPickedUrl || !!(editorTarget && editorTarget.file);
+  const hasSource = !!trimBuffer || !!editorPickedUrl || !!(editorTarget && editorTarget.file);
   btn.textContent = playing ? '⏸ 暂停播放' : '▶ 试听';
   btn.classList.toggle('hidden', !hasSource);
 }
 
 function toggleEditorPreview() {
   if (editorPreviewAudio) { stopEditorPreview(); return; }
-  const src = editorPickedUrl || (editorTarget ? encodeURI(editorTarget.file) : null);
-  if (!src) return;
-  const a = new Audio(src);
+  // 有音频数据 → 播放选中切片;否则回退播放原始文件
+  if (trimBuffer) {
+    const ac = getAudioCtx();
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+    const src = ac.createBufferSource();
+    src.buffer = trimBuffer;
+    src.connect(ac.destination);
+    const d = trimBuffer.duration;
+    const startT = trimStart * d;
+    const dur = Math.max(0.05, (trimEnd - trimStart) * d);
+    src.start(0, startT, dur);
+    editorPreviewAudio = src;
+    src.onended = () => {
+      if (editorPreviewAudio === src) { editorPreviewAudio = null; updateEditorPreviewBtn(); }
+    };
+    updateEditorPreviewBtn();
+    return;
+  }
+  const fileSrc = editorPickedUrl || (editorTarget ? encodeURI(editorTarget.file) : null);
+  if (!fileSrc) return;
+  const a = new Audio(fileSrc);
   editorPreviewAudio = a;
   a.addEventListener('ended', () => {
     if (editorPreviewAudio === a) { editorPreviewAudio = null; updateEditorPreviewBtn(); }
   });
   a.play().catch(() => {});
   updateEditorPreviewBtn();
+}
+
+// ---------- 音源裁剪:解码 → 波形 → 双拖拽手柄 ----------
+async function loadTrimSource(pathOrRel) {
+  const token = ++trimLoadToken;
+  trimBuffer = null;
+  trimStart = 0;
+  trimEnd = 1;
+  trimDirty = false;
+  document.getElementById('trim-editor').classList.add('hidden');
+
+  const b64 = await window.api.readSoundFile(pathOrRel);
+  if (token !== trimLoadToken) return; // 已被更新的选择取代
+  if (!b64) return;
+  try {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const buf = await getAudioCtx().decodeAudioData(bytes.buffer);
+    if (token !== trimLoadToken) return;
+    trimBuffer = buf;
+    document.getElementById('trim-editor').classList.remove('hidden');
+    drawTrimWave();
+    updateTrimUI();
+  } catch {
+    /* 不支持的格式:不显示裁剪,保留原文件导入 */
+  }
+  updateEditorPreviewBtn();
+}
+
+function drawTrimWave() {
+  const canvas = document.getElementById('trim-wave');
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!trimBuffer || !w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const ch = trimBuffer.getChannelData(0);
+  const mid = h / 2;
+  const step = Math.max(1, Math.floor(ch.length / w));
+  ctx.strokeStyle = '#4a7ab8';
+  ctx.beginPath();
+  for (let x = 0; x < w; x++) {
+    let min = 1;
+    let max = -1;
+    const start = x * step;
+    for (let i = 0; i < step && start + i < ch.length; i++) {
+      const v = ch[start + i];
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    ctx.moveTo(x + 0.5, mid - max * mid * 0.9);
+    ctx.lineTo(x + 0.5, mid - min * mid * 0.9);
+  }
+  ctx.stroke();
+}
+
+function updateTrimUI() {
+  const sel = document.getElementById('trim-selection');
+  const hl = document.getElementById('trim-handle-left');
+  const hr = document.getElementById('trim-handle-right');
+  const time = document.getElementById('trim-time');
+  sel.style.left = (trimStart * 100) + '%';
+  sel.style.width = ((trimEnd - trimStart) * 100) + '%';
+  hl.style.left = (trimStart * 100) + '%';
+  hr.style.left = (trimEnd * 100) + '%';
+  if (trimBuffer) {
+    const d = trimBuffer.duration;
+    time.textContent = `${(trimStart * d).toFixed(1)}s - ${(trimEnd * d).toFixed(1)}s / ${d.toFixed(1)}s`;
+  }
+}
+
+function bindTrimHandle(handle, isStart) {
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const rect = document.getElementById('trim-editor').getBoundingClientRect();
+    const move = (ev) => {
+      let pct = (ev.clientX - rect.left) / rect.width;
+      pct = Math.max(0, Math.min(1, pct));
+      if (isStart) trimStart = Math.min(pct, trimEnd - 0.02);
+      else trimEnd = Math.max(pct, trimStart + 0.02);
+      trimDirty = true;
+      updateTrimUI();
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+
+bindTrimHandle(document.getElementById('trim-handle-left'), true);
+bindTrimHandle(document.getElementById('trim-handle-right'), false);
+window.addEventListener('resize', drawTrimWave);
+
+// 将 AudioBuffer 的 [startSec, endSec] 区间编码为 16-bit PCM WAV
+function encodeWav(buffer, startSec, endSec) {
+  const sr = buffer.sampleRate;
+  const ch = buffer.numberOfChannels;
+  const startFrame = Math.max(0, Math.floor(startSec * sr));
+  const endFrame = Math.min(buffer.length, Math.ceil(endSec * sr));
+  const frames = Math.max(1, endFrame - startFrame);
+  const bytes = new Uint8Array(44 + frames * ch * 2);
+  const view = new DataView(bytes.buffer);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + frames * ch * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);          // PCM
+  view.setUint16(22, ch, true);
+  view.setUint32(24, sr, true);
+  view.setUint32(28, sr * ch * 2, true);
+  view.setUint16(32, ch * 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, frames * ch * 2, true);
+  let off = 44;
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < ch; c++) {
+      let s = buffer.getChannelData(c)[startFrame + i];
+      s = Math.max(-1, Math.min(1, s));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+  return bytes;
 }
 
 function openSoundEditor(item) {
@@ -485,11 +653,16 @@ function openSoundEditor(item) {
   document.getElementById('sound-editor-file').textContent = item ? item.file.split('/').pop() : '未选择文件';
   soundEditorModal.classList.remove('hidden');
   updateEditorPreviewBtn(); // 编辑已有条目:直接可试听当前音源
+  if (item) loadTrimSource(item.file); // 加载波形供裁剪
   document.getElementById('sound-editor-name').focus();
 }
 
 function closeSoundEditor() {
   stopEditorPreview();
+  trimLoadToken++; // 取消进行中的音频加载
+  trimBuffer = null;
+  trimDirty = false;
+  document.getElementById('trim-editor').classList.add('hidden');
   soundEditorModal.classList.add('hidden');
   editorTarget = null;
   editorPickedPath = null;
@@ -505,6 +678,7 @@ async function pickSoundSource() {
   document.getElementById('sound-editor-file').textContent = picked.name;
   const nameInput = document.getElementById('sound-editor-name');
   if (!nameInput.value.trim()) nameInput.value = picked.name.replace(/\.[^.]+$/, '');
+  loadTrimSource(picked.path); // 解码并显示波形
   updateEditorPreviewBtn();
 }
 
@@ -512,8 +686,15 @@ async function saveSoundEditor() {
   const name = document.getElementById('sound-editor-name').value.trim()
     || (editorTarget ? editorTarget.name : '未命名音效');
   let file = editorTarget ? editorTarget.file : null;
-  if (editorPickedPath) {
-    const imported = await window.api.importSound(editorPickedPath); // 保存时才复制到 data/sounds
+  if (trimDirty && trimBuffer) {
+    // 用户拖动过手柄 → 将选中区间编码为 WAV 切片保存
+    const d = trimBuffer.duration;
+    const bytes = encodeWav(trimBuffer, trimStart * d, trimEnd * d);
+    const saved = await window.api.saveSoundClip({ name, bytes });
+    if (!saved) return;
+    file = saved.file;
+  } else if (editorPickedPath) {
+    const imported = await window.api.importSound(editorPickedPath); // 未裁剪:直接复制原文件到 data/sounds
     if (!imported) return;
     file = imported.file;
   }

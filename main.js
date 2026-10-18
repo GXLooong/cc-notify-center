@@ -168,7 +168,7 @@ const server = http.createServer((req, res) => {
     // 调试:读取渲染层实时 DOM 中的通知条目(诊断"顶替未生效"用)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(
-        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal'), soundEditor: !!document.getElementById('sound-editor-modal'), editorPreviewBtn: !!document.getElementById('sound-editor-preview'), soundCount: (typeof allSoundItems === 'function' ? allSoundItems().length : -1)})"
+        "JSON.stringify({items: [...document.querySelectorAll('#list .item')].map(e => ({id: e.dataset.id, session: (e.dataset.session||'').slice(0,8), prompt: e.querySelector('.prompt') ? e.querySelector('.prompt').textContent.slice(0,20) : ''})), panelW: document.getElementById('tasks-panel').getBoundingClientRect().width, divider: !!document.getElementById('divider'), title: document.getElementById('title').textContent, appTitle: localStorage.getItem('appTitle'), settingsBtn: !!document.getElementById('settings-btn'), soundModal: !!document.getElementById('settings-modal'), soundEditor: !!document.getElementById('sound-editor-modal'), editorPreviewBtn: !!document.getElementById('sound-editor-preview'), trimVisible: !!document.getElementById('trim-editor') && !document.getElementById('trim-editor').classList.contains('hidden'), trimTime: document.getElementById('trim-time') ? document.getElementById('trim-time').textContent : '', soundCount: (typeof allSoundItems === 'function' ? allSoundItems().length : -1)})"
       ).then((raw) => {
         const items = JSON.parse(raw);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -223,6 +223,26 @@ const server = http.createServer((req, res) => {
         mainWindow.setBounds(b);
         res.writeHead(200);
         res.end('ok');
+      } catch {
+        res.writeHead(400);
+        res.end('bad json');
+      }
+    });
+  } else if (req.method === 'POST' && req.url === '/debug/open-editor') {
+    // 调试:程序化打开音效编辑窗口 {key} 或关闭 {close:true}(验证裁剪 UI 用)
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const js = payload.close
+          ? "closeSoundEditor(); 'ok'"
+          : (payload.key
+            ? `openSoundEditor(allSoundItems().find(s => s.key === ${JSON.stringify(payload.key)})); 'ok'`
+            : "openSoundEditor(null); 'ok'");
+        mainWindow.webContents.executeJavaScript(js)
+          .then(() => { res.writeHead(200); res.end('ok'); })
+          .catch(() => { res.writeHead(500); res.end('fail'); });
       } catch {
         res.writeHead(400);
         res.end('bad json');
@@ -377,6 +397,29 @@ ipcMain.handle('sound:import', (_e, src) => {
   const destName = `${Date.now()}-${safeName}`;
   fs.copyFileSync(src, path.join(dir, destName));
   return { name: path.basename(src), file: `data/sounds/${destName}` };
+});
+
+// 读取音频文件给渲染层解码(裁剪用);支持绝对路径与相对 app 目录的路径
+ipcMain.handle('sound:read', (_e, p) => {
+  try {
+    if (!p) return null;
+    const abs = path.isAbsolute(p) ? p : path.join(__dirname, p);
+    if (!fs.existsSync(abs)) return null;
+    return fs.readFileSync(abs).toString('base64');
+  } catch {
+    return null;
+  }
+});
+
+// 保存裁剪后的 WAV 切片(渲染层传入 Uint8Array)
+ipcMain.handle('sound:save-clip', (_e, { name, bytes }) => {
+  if (!bytes) return null;
+  const dir = path.join(DATA_DIR, 'sounds');
+  fs.mkdirSync(dir, { recursive: true });
+  const safe = String(name || 'clip').replace(/[^\w.\-一-龥]/g, '_').slice(0, 40);
+  const destName = `${Date.now()}-${safe}.wav`;
+  fs.writeFileSync(path.join(dir, destName), Buffer.from(bytes));
+  return { name: `${safe}.wav`, file: `data/sounds/${destName}` };
 });
 
 // 复制任务:同区新增,标题加 copied- 前缀(副本为新任务,不带完成状态)
