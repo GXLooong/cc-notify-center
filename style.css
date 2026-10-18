@@ -335,7 +335,8 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 8px;
+  width: 10px;
+  transform: translateX(-50%); /* 手柄中心对齐选区边界:0% 和 100% 时各露出一半,不会被 overflow 裁没 */
   background: #4a9eff;
   cursor: col-resize;
   opacity: 0.85;
